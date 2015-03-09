@@ -1,0 +1,14 @@
+#! /bin/bash
+
+#Create the directories
+mkdir release
+mkdir bin
+
+cd release
+echo `cmake -G "Eclipse CDT4 - Unix Makefiles" -D_ECLIPSE_VERSION=4.4 ..`
+
+#End!
+echo "
+Import now from Eclipse
+"
+fi
