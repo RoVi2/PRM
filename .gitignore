@@ -1,0 +1,19 @@
+#Sublime Text
+*.sublime*
+*.orig
+
+#Compilation Folders
+bin/
+libs/
+release/
+
+#Eclipse
+src/MarkerColor/.project 
+src/MarkerColor/.cproject 
+*~
+
+#Merge
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
