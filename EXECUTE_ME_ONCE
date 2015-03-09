@@ -11,4 +11,3 @@ echo `cmake -G "Eclipse CDT4 - Unix Makefiles" -D_ECLIPSE_VERSION=4.4 ..`
 echo "
 Import now from Eclipse
 "
-fi
