@@ -1,4 +1,4 @@
- /*
+/*
  * Mandatory2.cpp
  *
  *  Created on: Mar 09, 2015
@@ -24,30 +24,13 @@ using namespace rw::pathplanning;
 using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
-//************************Define*****************************
-/*class Metrics{
-	public:
-		bool operator()(GraphNode& N1, GraphNode& N2)
-		{
-		   if () return true;
-		   return false;
-		}
-};
-//***********************************************************
-*/
-
-
-/*bool checkConnections(vector<int> newNode, vector<int> neighbour){
-
-}
-*/
 
 class GraphNode {
 
 private: 
 	Q _configuration;
 	int _ID;
-	vector<int> _connections;
+	vector<int> Connections;
 
 public:
 
@@ -55,23 +38,22 @@ public:
 	GraphNode(Q q_config, int identifier){_configuration=q_config; _ID=identifier;}
 
 	//Methods
-	Q getConfig() const {return(_configuration);}
+	Q getConfig() const {
+		return(_configuration);
+	}
 
-	int getID() const {return (_ID);}
-
-	vector<int> getConnections() const {return(vector<int> _connections);}
-
-
+	int getID(){
+		return (_ID);
+	}
 
 	double calculateMetrics(Q possibleNeighbour) {
 		return ((_configuration-possibleNeighbour).norm2());	//***************check this!!! _configuration.norm2()-possibleNeighbour.norm2()?
 	}
 
 	void newConnection(int newBrunchID){
-		_connections.push_back(newBrunchID);
+		Connections.push_back(newBrunchID);
 	}
 
-	
 
 };
 
@@ -147,57 +129,41 @@ int main(int argc, char** argv) {
 	//Collision detector and strategy
 	CollisionDetector detector(wc, ProximityStrategyFactory::makeDefaultCollisionStrategy());
 
-	//Graph: created as a map container. The key is the node's ID
+	//Graph: created as a map container. The key is the node ID
 	static GraphNode* newNode;
 	map <int, GraphNode*> PRMgraph;
 	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
 	int dale=0;
 	double maxDist=4.;
 	int ID=0; 
-	
-	//Set Nc
-	priority_queue<GraphNode*, vector<GraphNode*>, Metrics> candidateNeighbours;
-
 
 	//RPM ALGORITHM 
-	while(dale!=3){	//Limited to the creation of three edges (for testing)
+	while(dale!=3){
 
 		//Generation of new collision-free q
 		newNode= new GraphNode(randomConfiguration(device, state, detector), ID);
 		cout<<"New configuration: "<<newNode->getConfig()<<" ID: "<<newNode->getID()<<endl;
 
-		//Go throught the graph looking for neighbours closer than maxDist
+		//Go throught the graph looking for neighbours (3 by now) closer than maxDist
 		for(map<int,GraphNode*>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
-			
-			//If distance<=maxDist, we store the node in Nc
+			//If distance<=masDist
 			if(newNode->calculateMetrics(PRMgraph.find(it->second->getID())->second->getConfig())<=maxDist){
 				cout<<"Found neighbour: "<<it->second->getID()<<endl;
-				//Add candidate neighbour to priority queue sorted by distance
-				candidateNeighbours.push(PRMgraph.find(it->second->getID());	
+				//Check edge collision between the possible neighbour
+				if(!collisionChecking4(newNode->getConfig(), it->second->getConfig(), device, state, detector)){
+					//If no edge collision, create the connection in the graph
+					newNode->newConnection(it->second->getID());
+					dale++;
+					cout<<"Edge created between "<<newNode->getID()<<" and "<<it->second->getID()<<endl;
+				}
 			}
 		}
 
-		//Go throught the set of neighbours
-		while(!candidateNeighbours.empty()){
-			//******First check if there is a connection already ------> avoid cycles!!!!	if(checkConnections())
-
-			//If not already connected, check edge collision between the possible neighbours
-			if(!collisionChecking4(newNode->getConfig(), candidateNeighbours.top()->getConfig(), device, state, detector)){
-				//If no edge collision, create the connection in the graph (update list of connections in both nodes)
-				newNode->newConnection(candidateNeighbours.top()->getID());									//New connection in the new node
-				GraphNode.find(candidateNeighbours.top()->getID())->second->newConnection(newNode-getID())	//New connection in the node already in the graph
-				dale++;
-				cout<<"Edge created between "<<newNode->getID()<<" and "<<candidateNeighbours.top()->getID()<<endl;
-			}
-			//Remove neighbour from set (priority queue)
-			candidateNeighbours.pop();
-		}
-		
-		//Add new node to the PRM
+		//Add q to the PRM
 		PRMgraph[newNode->getID()]=newNode;
 		ID++;
 		
-		//Wait one second to avoid generating the same q several times (seed=current time)******** fix this
+		//Wait one second to avoid generating the same q several times (seed=current time)********
 		sleep(1);
 	}
 
