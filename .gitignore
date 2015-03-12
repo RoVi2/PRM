@@ -8,9 +8,9 @@ libs/
 release/
 
 #Eclipse
-src/MarkerColor/.project 
-src/MarkerColor/.cproject 
-*~
+*.project*
+*.cproject*
+
 
 #Merge
 *.BACKUP.*
