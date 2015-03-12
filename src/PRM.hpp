@@ -9,8 +9,8 @@
 
 #include "ui_PRM.h"
 
-#define USER 1 //JORGE, NACHO, CARLOS, KIM
-#define ROBOT 2 //KUKA, PA10
+#define USER 1 //1=JORGE, 2=NACHO, 3=CARLOS, 4=KIM
+#define ROBOT 2 //1=KUKA, 2=PA10
 
 class PRM: public rws::RobWorkStudioPlugin, private Ui::PRM
 {

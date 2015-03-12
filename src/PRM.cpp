@@ -26,19 +26,19 @@ using namespace rws;
 //--------------------------------------------------------
 //					 Global Paths
 //--------------------------------------------------------
-#if (ROBOT == 1)
+#if (ROBOT == 1) //KUKA
 	const string robotName = "KukaKr16";
-#elif (ROBOT == 2)
+#elif (ROBOT == 2) //PA10
 	const string robotName = "PA10";
 #endif
 
-#if (USER == 1)
+#if (USER == 1) //JORGE
 	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
-#elif (USER == 2)
+#elif (USER == 2) //NACHO
 	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
-#elif (USER == 3)
+#elif (USER == 3) //CARLOS
 	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
-#elif (USER == 4)
+#elif (USER == 4) //KIM
 	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
 #endif
 
