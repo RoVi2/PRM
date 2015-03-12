@@ -9,6 +9,9 @@
 
 #include "ui_PRM.h"
 
+#define USER 1 //JORGE, NACHO, CARLOS, KIM
+#define ROBOT 2 //KUKA, PA10
+
 class PRM: public rws::RobWorkStudioPlugin, private Ui::PRM
 {
 Q_OBJECT
@@ -17,26 +20,26 @@ Q_INTERFACES( rws::RobWorkStudioPlugin )
 Q_PLUGIN_METADATA(IID "dk.sdu.mip.Robwork.RobWorkStudioPlugin/0.1" FILE "plugin.json")
 #endif
 public:
+	//Constructors
     PRM();
 	virtual ~PRM();
 
+	//Merhods
     virtual void open(rw::models::WorkCell* workcell);
-
     virtual void close();
-
     virtual void initialize();
 
 private slots:
     void btnPressed();
-
     void stateChangedListener(const rw::kinematics::State& state);
 
 private:
-
-    rws::RobWorkStudio* _rws;
     rw::kinematics::State _state;
-    rw::models::WorkCell::Ptr _rwWorkCell;
-    rw::models::SerialDevice *_device;
+    rw::models::WorkCell::Ptr _wc;
+	rw::models::Device::Ptr _device;
+    //rw::models::SerialDevice *_device;
+    //rws::RobWorkStudio* _rws;
+
 };
 
 #endif /*RINGONHOOKPLUGIN_HPP_*/

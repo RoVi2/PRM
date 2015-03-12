@@ -23,25 +23,56 @@ using namespace std;
 
 using namespace rws;
 
+//--------------------------------------------------------
+//					 Global Paths
+//--------------------------------------------------------
+#if (ROBOT == 1)
+	const string robotName = "KukaKr16";
+#elif (ROBOT == 2)
+	const string robotName = "PA10";
+#endif
+
+#if (USER == 1)
+	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
+#elif (USER == 2)
+	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
+#elif (USER == 3)
+	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
+#elif (USER == 4)
+	const string userPath = "/home/veimox/Drive/Robot Systems/RoVi 2/Robotics 2/Projects/PRM/res/" + robotName + "/Scene.wc.xml";
+#endif
 
 
+//--------------------------------------------------------
+//					 Plugin Methods
+//--------------------------------------------------------
+/**
+ * Construts the plugin
+ */
 PRM::PRM():
-    RobWorkStudioPlugin("PRMUI", QIcon(":/pa_icon.png"))
+    		RobWorkStudioPlugin("PRMUI", QIcon(":/pa_icon.png"))
 {
-    setupUi(this);
+	setupUi(this);
 
-    // Connect stuff from the ui component
-    connect(_btn0    ,SIGNAL(pressed()), this, SLOT(btnPressed()) );
-    connect(_btn1    ,SIGNAL(pressed()), this, SLOT(btnPressed()) );
+	// Connect stuff from the ui component
+	connect(_btn0 ,SIGNAL(pressed()),
+			this, SLOT(btnPressed()) );
 }
 
+/**
+ * Destructs the plugin
+ */
 PRM::~PRM()
 {
 }
 
+/**
+ * Initialize the plugin
+ */
 void PRM::initialize() {
-    getRobWorkStudio()->stateChangedEvent().add(boost::bind(&PRM::stateChangedListener, this, _1), this);
-    _rws = getRobWorkStudio();
+	log().info() << "INITALIZE" << "\n";
+	getRobWorkStudio()->stateChangedEvent().add(boost::bind(&PRM::stateChangedListener, this, _1), this);
+	/*    _rws = getRobWorkStudio();
     _rwWorkCell = _rws->getWorkCell();
     _state = _rwWorkCell->getDefaultState();
 
@@ -49,57 +80,77 @@ void PRM::initialize() {
     if (devices.size() == 0)
         return;
     _device = dynamic_cast<SerialDevice*>(devices[0].get());
-    std::cout <<"Loaded device " << _device->getName() << std::endl;
+    std::cout <<"Loaded device " << _device->getName() << std::endl;*/
+
+
+	//Auto load workcell
+	//WorkCell::Ptr wc = WorkCellLoader::Factory::load("res/KukaKr16/Scene.wc.xml");
+	getRobWorkStudio()->setWorkCell(WorkCellLoader::Factory::load(userPath));
 }
 
+/**
+ *
+ * @param workcell
+ */
 void PRM::open(WorkCell* workcell)
 {
-    _rwWorkCell = workcell;
+	log().info() << "OPEN" << "\n";
+	log().info() << workcell->getFilename() << "\n";
+	_wc = workcell;
+	_state = _wc->getDefaultState();
+	_device = _wc->findDevice(robotName);
 }
 
-void PRM::close() {
+/**
+ * Close the plugin. Mandatory definition!
+ */
+void PRM::close(){
 }
 
+/**
+ * When the Botton in pressed the robot goes to the Goal State
+ */
 void PRM::btnPressed() {
-    QObject *obj = sender();
-    if(obj==_btn0){
-    Q qTemp = Q::zero(_device->getDOF());
-        _device->setQ(qTemp,_state);
-    _rws->setState(_state);
-        log().info() << "Button 0\n";
-    } else if(obj==_btn1){
-    Q qTemp = Q::zero(_device->getDOF());
-    for(unsigned int i = 0; i < qTemp.size(); i++){
-        qTemp[i] += 1;        
-    }
-        _device->setQ(qTemp,_state);
-    _rws->setState(_state);
-        log().info() << "Button 1\n";
-    }
-
-
+	QObject *obj = sender();
+	if(obj==_btn0){
+		Q qGoal = Q::zero(_device->getDOF());
+		_device->setQ(qGoal,_state);
+		getRobWorkStudio()->setState(_state);
+		log().info() << "Button 0\n";
+	}/* else if(obj==_btn1){
+		Q qTemp = Q::zero(_device->getDOF());
+		for(unsigned int i = 0; i < qTemp.size(); i++){
+			qTemp[i] += 1;
+		}
+		_device->setQ(qTemp,_state);
+		_rws->setState(_state);
+		log().info() << "Button 1\n";
+	}*/
 }
 
 void PRM::stateChangedListener(const State& state) {
-
 }
 
-Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDetector &detector){
-    State testState;
-    Math::seed(time(NULL));
-    CollisionDetector::QueryResult data;
-    bool collision=true;
-    Q Qrand;
 
-    while(collision){
-        Qrand=Math::ranQ(device->getBounds());
-        testState=state;
-        device->setQ(Qrand, testState);
-        collision=detector.inCollision(testState,&data);
-        cout << collision << endl;
-    }
-    
-    return Qrand;
+//--------------------------------------------------------
+//					 RPM Methods
+//--------------------------------------------------------
+Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDetector &detector){
+	State testState;
+	Math::seed(time(NULL));
+	CollisionDetector::QueryResult data;
+	bool collision=true;
+	Q Qrand;
+
+	while(collision){
+		Qrand=Math::ranQ(device->getBounds());
+		testState=state;
+		device->setQ(Qrand, testState);
+		collision=detector.inCollision(testState,&data);
+		cout << collision << endl;
+	}
+
+	return Qrand;
 }
 
 #if RWS_USE_QT5
