@@ -13,11 +13,6 @@
 #include <fstream>
 #include <rwlibs/proximitystrategies/ProximityStrategyFactory.hpp>
 
-/*using namespace rw::math;
-using namespace rw::common;
-using namespace rw::kinematics;
-using namespace rw::models;*/
-
 using namespace rw;
 using namespace rw::models;
 using namespace rw::kinematics;
@@ -75,7 +70,7 @@ void PRM::btnPressed() {
         log().info() << "Button 0\n";
     } else if(obj==_btn1){
 	Q qTemp = Q::zero(_device->getDOF());
-	for(int i = 0; i < qTemp.size(); i++){
+	for(unsigned int i = 0; i < qTemp.size(); i++){
 	    qTemp[i] += 1;        
 	}
         _device->setQ(qTemp,_state);
