@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
 	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours;
 
 	//PRM ALGORITHM 
-	while(dale!=10){	//Limited to the creation of three edges (for testing)
+	while(dale!=100){	//Limited to the creation of three edges (for testing)
 
 		//Generation of new collision-free q
 		GraphNode newNode(randomConfiguration(device, state, detector), ID);
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
 		//Go throught the graph looking for neighbours closer than maxDist
 		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
-			if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig())<=maxDist){
+			if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
 				candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
 				cout<<"Found neighbour: "<<it->second.getID()<<endl;
 			}
@@ -208,7 +208,10 @@ int main(int argc, char** argv) {
 					dale++;
 					cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
 				}
-			}			
+			}	
+			else{
+				cout<<"Nodes already graph connected"<<endl;
+			}		
 			//Remove neighbour from set (priority queue)
 			candidateNeighbours.pop();
 		}
