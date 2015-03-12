@@ -8,9 +8,9 @@ libs/
 release/
 
 #Eclipse
-*.project*
-*.cproject*
-
+*.project 
+*.cproject 
+*~
 
 #Merge
 *.BACKUP.*

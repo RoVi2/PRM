@@ -2,13 +2,27 @@
 
 #Create the directories
 mkdir release
-mkdir bin
+mkdir libs
 
 cd release
-echo `cmake -G "Eclipse CDT4 - Unix Makefiles" -D_ECLIPSE_VERSION=4.4 ..`
+echo `cmake -G "Eclipse CDT4 - Unix Makefiles" -D_ECLIPSE_VERSION=4.4 ../src`
+
+#Stores the current path
+cd ..
+current_path=$(pwd)
+
+cd ~
+touch RobWorkStudio.ini
+
+echo "
+[Plugins]
+
+UserPlugin\DockArea=2
+UserPlugin\Filename=libPRM	
+UserPlugin\Path=$current_path/libs
+UserPlugin\Visible=true" > RobWorkStudio.ini
 
 #End!
 echo "
 Import now from Eclipse
 "
-fi
