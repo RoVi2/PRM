@@ -65,6 +65,7 @@ public:
 		for(size_t i=0; i<device->getDOF(); i++){
 			dist+=pow(q1[i]-q2[i],2);
 		}
+		_tempD=dist;
 		return (dist);	
 	}
 
@@ -192,7 +193,7 @@ int main(int argc, char** argv) {
 			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
 			if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
 				candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
-				cout<<"Found neighbour: "<<it->second.getID()<<endl;
+				cout<<"Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
 			}
 		}
 
@@ -208,6 +209,9 @@ int main(int argc, char** argv) {
 					dale++;
 					cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
 				}
+				else{
+					cout<<"Collision detected in the edge"<<endl;
+				}
 			}	
 			else{
 				cout<<"Nodes already graph connected"<<endl;
@@ -215,7 +219,6 @@ int main(int argc, char** argv) {
 			//Remove neighbour from set (priority queue)
 			candidateNeighbours.pop();
 		}
-		
 		//Add new node to the PRM
 		PRMgraph[newNode.getID()]=newNode;
 		ID++;
