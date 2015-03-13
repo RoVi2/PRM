@@ -1,0 +1,15 @@
+THINGS THAT NEED TO BE DONE
+
+1) randomConfiguration()
+When it fails to find a configuration, something needs to be output
+
+2) Locate and delete the "small" unconnected trees that remains after the construction and expansion phases.
+---> it can be suggested as an improvement for the algorithm to output a completely connected PRM (only one tree instead of several)
+
+3) candidateNighbours 
+Fix the priority queue (I thinks is not shorting the nodes by distance)--> check class Metrics()
+
+4) Finish the learning phase (construction step): define for a specific robot and workspace the density of nodes that we want 
+total number of nodes/WS volume and finish when it is reached
+
+5) Put everything in the plug-in once it's done

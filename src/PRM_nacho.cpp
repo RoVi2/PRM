@@ -13,7 +13,6 @@
 #include <fstream>
 #include <iostream>
 #include <rwlibs/proximitystrategies/ProximityStrategyFactory.hpp>
-
 #include <queue>          // std::priority_queue
  
 using namespace std;
