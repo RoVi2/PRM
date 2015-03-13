@@ -11,6 +11,7 @@
 #include <rw/models/WorkCell.hpp>
 #include <rw/common.hpp>
 #include <fstream>
+#include <iostream>
 #include <rwlibs/proximitystrategies/ProximityStrategyFactory.hpp>
 
 #include <queue>          // std::priority_queue
@@ -38,7 +39,7 @@ private:
 
 public:
 
-	//Default constructor 
+	//Default constructor ***********Change for a different robot!!
 	GraphNode(){
 		_configuration=Q(6, 0,0,0,0,0,0); 
 		_ID=-1;
@@ -75,6 +76,7 @@ public:
 
 };
 
+//*************Check!!
 class Metrics{
 	public:
 		bool operator()(GraphNode N1, GraphNode N2)
@@ -129,7 +131,6 @@ bool collisionChecking4(Q q1, Q q2, Device::Ptr device, const State &state, cons
 
 Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDetector &detector){
 	State testState;
-	Math::seed(time(NULL));
 	CollisionDetector::QueryResult data;
 	bool collision=true;
 	Q Qrand;
@@ -140,7 +141,8 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
 		testState=state;
 		device->setQ(Qrand, testState);
 		collision=detector.inCollision(testState,&data);
-		if (a>20000) {
+		if (a>10000) {
+				//Qrand.zero(6);
 				cout << "Fail to find a collision free configuration" << endl;	//*******What shall we do here??
 				break; 
     	}
@@ -153,7 +155,12 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
 
 int main(int argc, char** argv) {
 
+	//Initial and goal configuration
+	Q q_init=Q(6, 0, -120, 110, 0, 100, 0);
+	Q q_goal=Q(6, -71, -96, 66, 26, 100, 0);
+
 	//Initializing workcell
+	Math::seed(time(NULL));
 	cout << " --- Program started --- " << endl << endl;
 	const string wcFile = "/home/ignaciotb/Documents/Semester1/Robotics1/Workcells/Kr16WorkCell/Scene.wc.xml";
 	const string deviceName = "KukaKr16";
@@ -171,33 +178,38 @@ int main(int argc, char** argv) {
 	CollisionDetector detector(wc, ProximityStrategyFactory::makeDefaultCollisionStrategy());
 
 	//Graph: created as a map container. The key is the node's ID
-	//GraphNode* newNode;
 	map <int, GraphNode> PRMgraph;
 	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
 	int dale=0;
 	double maxDist=4.;
 	int ID=0; 
+	int sizeNc;
+	Q newQ;
 	
-	//Set Nc
+	//Create Nc
 	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours;
 
-	//PRM ALGORITHM 
-	while(dale!=100){	//Limited to the creation of three edges (for testing)
+	//***********************************PRM ALGORITHM******************************************
 
-		//Generation of new collision-free q
+	//***LEARNING PHASE*****//
+
+	//1) CONSTRUCTION STEP
+	while(dale<20){	//Limited to the creation of 20 edges (for testing)
+
 		GraphNode newNode(randomConfiguration(device, state, detector), ID);
 		cout<<"New configuration: "<<newNode.getConfig()<<" ID: "<<newNode.getID()<<endl;
 
-		//Go throught the graph looking for neighbours closer than maxDist
+		sizeNc=0;
+		//Go throught the graph looking for neighbours closer than maxDist and creates Nc
 		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
 			if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
 				candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
-				cout<<"Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
+				cout<<"-----Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
 			}
 		}
 
-		//Go throught the set of neighbours
+		//Go through the set of neighbours
 		while(!candidateNeighbours.empty()){
 			//Check if there is a graph connection already ------> avoid cycles
 			if(checkConnections(newNode.getConnections(), candidateNeighbours.top().getConnections(), PRMgraph)){
@@ -208,6 +220,13 @@ int main(int argc, char** argv) {
 					PRMgraph.find(candidateNeighbours.top().getID())->second.newConnection(newNode.getID());	//New connection in the node already in the graph
 					dale++;
 					cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
+					sizeNc++;
+					//A maximum of 30 neighbours are connected and then the queue is empty
+					if(sizeNc>=30){
+						while(!candidateNeighbours.empty()){
+							candidateNeighbours.pop();
+						}
+					}
 				}
 				else{
 					cout<<"Collision detected in the edge"<<endl;
@@ -216,18 +235,29 @@ int main(int argc, char** argv) {
 			else{
 				cout<<"Nodes already graph connected"<<endl;
 			}		
-			//Remove neighbour from set (priority queue)
-			candidateNeighbours.pop();
 		}
+		
 		//Add new node to the PRM
 		PRMgraph[newNode.getID()]=newNode;
 		ID++;
-		
-		//Wait one second to avoid generating the same q several times (seed=current time)******** fix this
-		sleep(1);
 	}
+	//END OF CONSTRUCTION STEP
+	cout<<"Size of the PRM: "<<PRMgraph.size()<<endl;
 
-	cout<<"Size of the graph: "<<PRMgraph.size()<<endl;
+	//Just for testing
+	/*for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		cout<<"Connections of node: "<<it->second.getID()<<", "<<endl;
+		for(int i=0; i<PRMgraph.find(it->second.getID())->second.getConnections().size(); i++){
+			cout<<PRMgraph.find(it->second.getID())->second.getConnections()[i]<<endl;
+		}
+	}*/
+
+	//2) EXPANSION STEP
+
+	//*****************
+
+	//***QUERY PHASE****//
+
 	cout << " --- Program ended ---" << endl;
 	return 0;
 }
