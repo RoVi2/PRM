@@ -26,6 +26,8 @@ using namespace rw::pathplanning;
 using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
+const double maxDist=50.0;
+
 
 class GraphNode {
 
@@ -35,6 +37,10 @@ private:
 	int _ID;
 	vector<int> _connections;
 	double _tempD;
+	int _localPlannerCalls;
+	int _localPlannerFails;
+	double _failureRatio;
+	double _nFailureRatio; 
 
 public:
 
@@ -48,6 +54,8 @@ public:
 	GraphNode(Q q_config, int identifier){
 		_configuration=q_config; 
 		_ID=identifier;
+		_localPlannerCalls=0;
+		_localPlannerFails=0;
 	}
 
 	//Methods
@@ -71,6 +79,27 @@ public:
 
 	void newConnection(int newBrunchID){
 		_connections.push_back(newBrunchID);
+	}
+
+	void localPlanner(bool result){
+		_localPlannerCalls++;
+		if(!result){
+			_localPlannerFails++;
+		}
+
+		_failureRatio=(float)_localPlannerFails/((float)_localPlannerCalls+1);
+	}
+
+	double getFailureRatio(){
+		return _failureRatio;
+	}
+
+	double getNFailureRatio(){
+		return _nFailureRatio;
+	}
+
+	void setNFailureRatio(double total){
+		_nFailureRatio=_failureRatio/total;
 	}
 
 };
@@ -150,7 +179,27 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
 	return Qrand;
 }
 
+Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const CollisionDetector &detector){
+	State testState=state;
+	CollisionDetector::QueryResult data;
+	Q Qfin=nodeInit.getConfig();
+	bool collision;
 
+	while(nodeInit.calculateMetrics(Qfin, testState, device)<maxDist){
+		Q Qdir=Math::ranDir(6,0.1);
+		collision=false;
+		while(!collision){
+			Qfin+=Qdir;
+			cout << Qfin << endl;
+			sleep(1);
+			testState=state;
+			device->setQ(Qfin,testState);
+			collision=detector.inCollision(testState,&data);
+		}
+	}
+
+	return Qfin;
+}
 
 int main(int argc, char** argv) {
 
