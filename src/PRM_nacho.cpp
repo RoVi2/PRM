@@ -282,7 +282,9 @@ int main(int argc, char** argv) {
 			}	
 			else{
 				cout<<"Nodes already graph connected"<<endl;
-			}		
+			}
+
+			candidateNeighbours.pop();		
 		}
 		
 		//Add new node to the PRM
