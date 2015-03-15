@@ -188,6 +188,13 @@ void createFalseGraph(map<int, GraphNode> & graph){
 	graph[6].newConnection(7);
 	graph[7].newConnection(8);
 
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		cout<<"Connections of node: "<<it->second.getID()<<", "<<endl;
+		for(int i=0; i<PRMgraph.find(it->second.getID())->second.getConnections().size(); i++){
+			cout<<PRMgraph.find(it->second.getID())->second.getConnections()[i]<<endl;
+		}
+	}
+
 }
 
 /**
@@ -303,6 +310,13 @@ vector<GraphNode> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q go
 }
 
 
+
+
+
+
+
+
+
 int main(int argc, char** argv) {
 	//Lets put randomness to this, baby!
 	Math::seed(time(NULL));
@@ -322,6 +336,11 @@ int main(int argc, char** argv) {
 	const State state = wc->getDefaultState();
 
 	map <int, GraphNode> PRMgraph;
+
+
+
+
+
 
 	Q start(6, 0,0,0,0,0,0);
 	Q goal(6, 0,0,0,0,0,7);

@@ -300,6 +300,8 @@ void expandTree(Device::Ptr device, const State state, const CollisionDetector &
 	}
 }
 
+
+
 int main(int argc, char** argv) {
 
 	//Initial and goal configuration
@@ -339,7 +341,7 @@ int main(int argc, char** argv) {
 	//***LEARNING PHASE*****//
 
 	//1) CONSTRUCTION STEP
-	while(dale<10){	//Limited to the creation of 20 edges (for testing)
+	while(dale<100){	//Limited to the creation of 20 edges (for testing)
 		Q Qrandom;
 		while(!randomConfiguration(device, state, detector, Qrandom)){}
 		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID);
