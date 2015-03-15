@@ -52,6 +52,7 @@ public:
 		_configuration=q_config; 
 		_ID=identifier;
 		_tempD=0;
+		_score=0;
 	}
 
 	//Methods
@@ -59,6 +60,8 @@ public:
 	int getID() const {return (_ID);}
 	double getTempD() const {return(_tempD);}
 	vector<int> getConnections() const {return(_connections);}
+	double getScore() const {return(_score);}
+	void setScore(double score) {_score=score;}
 
 
 	double calculateMetrics(Q possibleNeighbour, Device::Ptr device) {
@@ -153,6 +156,55 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
 }
 
 /**
+ * Creates a false graph
+ * @param graph
+ */
+void createFalseGraph(map<int, GraphNode> & graph){
+	Q q1(6, 0,0,0,0,0,0);
+	Q q2(6, 0,0,0,0,0,1);
+	Q q3(6, 0,0,0,0,0,2);
+	Q q4(6, 12,0,0,0,0,3);
+	Q q5(6, 23,0,0,0,0,4);
+	Q q6(6, 0,0,0,0,0,5);
+	Q q7(6, 0,0,0,0,0,6);
+	Q q8(6, 0,0,0,0,0,7);
+
+	graph[0] = GraphNode(q1, 0);
+	graph[1] = GraphNode(q2, 1);
+	graph[2] = GraphNode(q3, 2);
+	graph[3] = GraphNode(q4, 3);
+	graph[4] = GraphNode(q5, 4);
+	graph[5] = GraphNode(q6, 5);
+	graph[6] = GraphNode(q7, 6);
+	graph[7] = GraphNode(q8, 7);
+
+	graph[0].newConnection(1);
+	graph[0].newConnection(2);
+	graph[2].newConnection(4);
+	graph[2].newConnection(3);
+	graph[4].newConnection(5);
+	graph[4].newConnection(6);
+	graph[5].newConnection(7);
+	graph[6].newConnection(7);
+	graph[7].newConnection(8);
+
+}
+
+/**
+ * Given a Graph and the Q of one of its nodes, return the ID
+ * @param graph The graph to search in
+ * @param q the Q to search
+ * @return The ID of the Q inside the graph
+ */
+int findIDfromQ(map<int, GraphNode> & graph, Q & q){
+	int ID = 0;
+	for (unsigned int nodeIterator = 0; nodeIterator < graph.size(); nodeIterator++){
+		if (q == graph[nodeIterator].getConfig()) ID = graph[nodeIterator].getID();
+	}
+	return ID;
+}
+
+/**
  * This method calculates the score of a node based on the A start algorithm.
  * The map's cost has two values f(x) = g(x) + h(x).
  * g(x) is the already traveled distance.
@@ -163,12 +215,15 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
  * @param goalNode The node to finish in
  * @return The score of the node
  */
-float calculateAStarScore(GraphNode & node, double & currentPathScore, GraphNode & goalNode, Device::Ptr device){
+float calculateAStarScore(GraphNode & node, double & currentPathScore, Q goalQ, Device::Ptr device){
 	//Calculates g(x)
 	double g_x = currentPathScore;
 	//Calculates h(x)
-	double h_x = node.calculateMetrics(goalNode.getConfig(), device);
+	double h_x = node.calculateMetrics(goalQ, device);
+	//Stores the value in the node
+	node.setScore(g_x + h_x);
 	//Tadaaaaaa
+	cout << "Score for node " << node.getID() <<  "is: " << g_x + h_x << endl;
 	return g_x + h_x;
 }
 
@@ -179,45 +234,52 @@ float calculateAStarScore(GraphNode & node, double & currentPathScore, GraphNode
  * @param goalNode The node you want to finish in
  * @return A vector with all the nodes followed
  */
-vector<GraphNode> calculatePath( map <int, GraphNode> & PRMgraph, GraphNode & startNode, GraphNode & goalNode, Device::Ptr device){
+vector<GraphNode> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q goalQ, Device::Ptr device){
 	vector<GraphNode> solutionPath; //Here the solutions nodes will be stored
 
 	map<int, GraphNode> openList;
 	map<int, GraphNode> closedList;
 
 	GraphNode * currentNode;
-	GraphNode * auxNode;
-	bool pathFounded = 0;
 
 	double currentPathScore = 0;
-	double temporalScore = 0;
-	double electedNodeScore = 0;
-	double electedNodeID = 0;
 
-	//Lets copy the graph to the open list
+	//Lets clean the openList and copy the graph to it
+	openList.clear();
 	openList = PRMgraph;
-	//Starts with the startNode
-	*currentNode = startNode;
+	//Lets find the ID of the start and goal states inside the graph
+	int ID_start = findIDfromQ(PRMgraph, startQ);
+	int ID_goal = findIDfromQ(PRMgraph, goalQ);
 
-	//While nodes on the open list or f
-	while (!openList.empty() && !pathFounded){
+	//Starts with the startNode
+	currentNode = &openList[ID_start];
+
+	//While nodes on the open list
+	cout << "Holaaaaaa";
+	while (!openList.empty()){
+		//Choose the node with the smallest score
+		for (auto node : openList) if (node.second.getScore() < currentNode->getScore()) currentNode = &node.second;
+		//Check if we are in the goal
+		if (currentNode->getID()==ID_goal) return solutionPath;
 		//We add the current map to the closed list
 		closedList[currentNode->getID()] = *currentNode;
-
+		//And remove it from the openList
+		openList.erase(currentNode->getID());
 		//For all the connections, calculate the score of each one
-		for (unsigned int connectedNodeCounter = 0; connectedNodeCounter < currentNode->getConnections().size(); connectedNodeCounter++){
-			*auxNode = openList.find(currentNode->getConnections()[connectedNodeCounter])->second;
-			temporalScore = calculateAStarScore(*auxNode, currentPathScore, goalNode, device);
-			//And select the smallest one with its ID
-			if (temporalScore < electedNodeScore) electedNodeID = auxNode->getID();
+		for (auto nodeConnected : currentNode->getConnections()){
+			//Check that it is not in the closed list
+			if (closedList.count(nodeConnected)==0){
+				//If so, calculate its score!
+				calculateAStarScore(openList.find(nodeConnected)->second, currentPathScore, goalQ, device);
+			}
 		}
-
-		//So now we have the next node! Lets update the current Node
-		*currentNode = openList.find(currentNode->getConnections()[electedNodeID])->second;
 		//Put it in the solution vector
 		solutionPath.push_back(*currentNode);
-		//And updates the path score
-		currentPathScore+=temporalScore;
+	}
+
+	if (currentNode->getID()!=ID_goal){
+		solutionPath.empty();
+		cout << "Solution not found" << endl;
 	}
 
 	return solutionPath;
@@ -242,7 +304,21 @@ int main(int argc, char** argv) {
 	}
 	const State state = wc->getDefaultState();
 
-	//Collision detector and strategy
+	map <int, GraphNode> PRMgraph;
+
+	Q start(6, 0,0,0,0,0,0);
+	Q goal(6, 0,0,0,0,0,2);
+
+	createFalseGraph(PRMgraph);
+	vector<GraphNode> solution = calculatePath(PRMgraph, start, goal, device);
+
+	cout << "The solution found is:" << endl;
+	for (auto i : solution){
+		cout << i.getID() << ", ";
+	}
+	cout << endl;
+
+/*	//Collision detector and strategy
 	CollisionDetector detector(wc, ProximityStrategyFactory::makeDefaultCollisionStrategy());
 
 	//Graph: created as a map container. The key is the node's ID
@@ -297,7 +373,7 @@ int main(int argc, char** argv) {
 		//Add new node to the PRM
 		PRMgraph[newNode.getID()]=newNode;
 		ID++;
-	}
+	}*/
 
 	cout<<"Size of the graph: "<<PRMgraph.size()<<endl;
 	cout << " --- Program ended ---" << endl;
