@@ -39,10 +39,13 @@ private:
 	int _ID;
 	vector<int> _connections;
 	double _tempD;
+	double _score;
 	int _localPlannerCalls;
 	int _localPlannerFails;
 	double _failureRatio;
-	double _nFailureRatio; 
+	double _nFailureRatio;
+	vector<Q> _solution;
+
 
 public:
 
@@ -50,6 +53,8 @@ public:
 	GraphNode(){
 		_configuration=Q(6, 0,0,0,0,0,0); 
 		_ID=-1;
+		_tempD=0;
+		_score=-1;
 	}
 
 	//Constructor
@@ -58,6 +63,8 @@ public:
 		_ID=identifier;
 		_localPlannerCalls=0;
 		_localPlannerFails=0;
+		_tempD=0;
+		_score=0;
 	}
 
 	//Methods
@@ -65,9 +72,13 @@ public:
 	int getID() const {return (_ID);}
 	double getTempD() const {return(_tempD);}
 	vector<int> getConnections() const {return(_connections);}
+	double getScore() const {return(_score);}
+	void setScore(double score) {_score=score;}
+	void addSolution(){_solution.push_back(_configuration);}
+	vector<Q> getSolution(){return _solution;}
 
 
-	double calculateMetrics(Q possibleNeighbour, const State &state, Device::Ptr device) {
+	double calculateMetrics(Q possibleNeighbour, Device::Ptr device) {
 		Q q1, q2;
 		q1=this->_configuration;
 		q2=possibleNeighbour;
@@ -111,7 +122,7 @@ class Metrics{
 	public:
 		bool operator()(GraphNode N1, GraphNode N2)
 		{
-		   if (N2.getTempD()<N1.getTempD()) return true;
+		   if (N2.getTempD()>N1.getTempD()) return true;
 		   return false;
 		}
 };
@@ -189,7 +200,7 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 	Q Qmin=bounds.first;
 	Q Qmax=bounds.second;
 
-	while(nodeInit.calculateMetrics(Qfin, testState, device)<maxDist){
+	while(nodeInit.calculateMetrics(Qfin, device)<maxDist){
 		Q Qdir=Math::ranDir(6,0.1);
 		collision=false;
 		while(!collision && Qmin<(Qfin+Qdir) && (Qfin+Qdir)<Qmax){
@@ -203,23 +214,22 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 	return Qfin;
 }
 
-void addNodeToTree(Q configuration, Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID){
+void addNodeToTree(Q configuration, Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID, 	priority_queue<GraphNode, vector<GraphNode>, Metrics> &candidateNeighbours)
+{
 	GraphNode newNode(configuration, ID);
 	cout<<"New configuration: "<<newNode.getConfig()<<" ID: "<<newNode.getID()<<endl;
-
-	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours;
 
 	int sizeNc=0;
 		//Go throught the graph looking for neighbours closer than maxDist and creates Nc
 	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
-		if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
+		if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), device)<=maxDist){
 			candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
-			cout<<"-----Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
+			cout<<"-----Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), device)<<endl;
 		}
 	}
 
-		//Go through the set of neighbours
+	//Go through the set of neighbours
 	while(!candidateNeighbours.empty()){
 		//Check if there is a graph connection already ------> avoid cycles
 		if(checkConnections(newNode.getConnections(), candidateNeighbours.top().getConnections(), PRMgraph)){
@@ -249,9 +259,8 @@ void addNodeToTree(Q configuration, Device::Ptr device, const State state, const
 		else{
 			cout<<"Nodes already graph connected"<<endl;
 		}
-
-		candidateNeighbours.pop();		
-		}
+		candidateNeighbours.pop();
+	}
 		
 	//Add new node to the PRM
 	PRMgraph[newNode.getID()]=newNode;
@@ -259,6 +268,8 @@ void addNodeToTree(Q configuration, Device::Ptr device, const State state, const
 }
 
 void expandTree(Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID){
+	
+	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours2;
 	double total=0;
 	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 		total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
@@ -277,7 +288,7 @@ void expandTree(Device::Ptr device, const State state, const CollisionDetector &
 
 	while(max>threshold){
 		Q r=randomBounce(PRMgraph.find(max_index)->second, device, state, detector);
-		addNodeToTree(r,device,state,detector,PRMgraph,ID);
+		addNodeToTree(r,device,state,detector,PRMgraph,ID, candidateNeighbours2);
 		cout << "New configuration Q: " << r << endl;
 
 		total=0;
@@ -293,14 +304,127 @@ void expandTree(Device::Ptr device, const State state, const CollisionDetector &
 				max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
 				max_index=it->second.getID();
 			}
-			//cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+			cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
 		}
 
 		cout << "Max failure: " << max << endl;
 	}
 }
 
+/**
+ * Given a Graph and the Q of one of its nodes, return the ID
+ * @param graph The graph to search in
+ * @param q the Q to search
+ * @return The ID of the Q inside the graph
+ */
+int findIDfromQ(map<int, GraphNode> & graph, Q & q){
+	int ID = 0;
+	for (unsigned int nodeIterator = 0; nodeIterator < graph.size(); nodeIterator++){
+		if (q == graph[nodeIterator].getConfig()) ID = graph[nodeIterator].getID();
+	}
+	return ID;
+}
 
+/**
+ * This method calculates the score of a node based on the A start algorithm.
+ * The map's cost has two values f(x) = g(x) + h(x).
+ * g(x) is the already traveled distance.
+ * h(x) is the heuristic score based on the distance left from a current state to the
+ * goal.
+ * @param node The node to calculate its score
+ * @param previousNode The father of the node
+ * @param goalNode The node to finish in
+ * @return The score of the node
+ */
+float calculateAStarScore(GraphNode & node, double currentPathScore, Q goalQ, Device::Ptr device){
+	//Calculates g(x)
+	double g_x = currentPathScore;
+	//Calculates h(x)
+	double h_x = node.calculateMetrics(goalQ, device);
+	//Stores the value in the node
+	node.setScore(g_x + h_x);
+	//Tadaaaaaa
+	cout << "Score for node " << node.getID() <<  " is: " << g_x  << "+" << h_x << " = " << g_x+h_x << endl;
+	return g_x + h_x;
+}
+
+
+/**
+ * Given a Graph calculates the shortest way from the Start node to the Goal node.
+ * @param PRMgraph The graph to search the path from
+ * @param startNode The node from which you start
+ * @param goalNode The node you want to finish in
+ * @return A vector with all the nodes followed
+ */
+vector<Q> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q goalQ, Device::Ptr device){
+	//The open and closed list
+	map<int, GraphNode> openList;
+	map<int, GraphNode> closedList;
+	//And the auxiliar node
+	GraphNode * currentNode;
+
+	//Lets find the ID of the start and goal states inside the graph
+	int ID_start = findIDfromQ(PRMgraph, startQ);
+	int ID_goal = findIDfromQ(PRMgraph, goalQ);
+	cout << "The goal ID is: " << ID_goal << endl;
+
+	//Starts with the startNode
+	openList[ID_start] = PRMgraph[ID_start];
+	currentNode = & openList[ID_start];
+	cout << "ID: " << openList[ID_start].getID() << " Connections: " << openList[ID_start].getConnections().size() << endl;
+	//And calculate its score
+	calculateAStarScore(*currentNode, 0, goalQ, device);
+
+	//Reset the temporal variables, counter and limit
+	int counter = 0;
+	int limit = 10000;
+	int tempScore=99999;
+	int tempID=0;
+
+	//While nodes on the open list
+	while (!openList.empty() && counter<limit){
+		tempScore = 99999;
+		//Choose the node with the smallest score
+		cout << endl << "The openList size is: " << openList.size() << endl;
+		for (auto node : openList){
+			if (node.second.getScore()<=tempScore && node.second.getScore()>=0){
+				tempScore = node.second.getScore();
+				tempID = node.second.getID();
+			}
+		}
+		currentNode = &openList[tempID];
+		cout << "ID: " << currentNode->getID() << " Score: " << currentNode->getScore() << " Connections: " << currentNode->getConnections().size() << endl;
+		//Check if we are in the goal
+		if (currentNode->getID()==ID_goal){
+			currentNode->addSolution();
+			return currentNode->getSolution();
+		}
+		//We add the current map to the closed list
+		closedList[currentNode->getID()] = *currentNode;
+		//For all the connections, calculate the score of each one
+		for (auto nodeConnected : currentNode->getConnections()){
+			openList[nodeConnected] = PRMgraph[nodeConnected];
+			openList[nodeConnected].addSolution();
+			cout << "  connected to:" << nodeConnected << endl;
+			//Check that it is not in the closed list
+			if (closedList.count(nodeConnected)==0 && openList[nodeConnected].getID()>0){
+				//If so, calculate its score!
+				calculateAStarScore(openList.find(nodeConnected)->second, currentNode->getScore(), goalQ, device);
+			}
+		}
+		//Put it in the solution vector
+		currentNode->addSolution();
+		//And remove it from the openList
+		openList.erase(currentNode->getID());
+		//Updates the counter
+		counter++;
+	}
+
+	cout << "Solution not found" << endl;
+
+	vector<Q> imsorry;
+	return imsorry;
+}
 
 int main(int argc, char** argv) {
 
@@ -341,10 +465,10 @@ int main(int argc, char** argv) {
 	//***LEARNING PHASE*****//
 
 	//1) CONSTRUCTION STEP
-	while(dale<100){	//Limited to the creation of 20 edges (for testing)
+	while(dale<10){	//Limited to the creation of 20 edges (for testing)
 		Q Qrandom;
 		while(!randomConfiguration(device, state, detector, Qrandom)){}
-		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID);
+		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID, candidateNeighbours);
 		dale++;
 	}
 	//END OF CONSTRUCTION STEP
@@ -365,6 +489,16 @@ int main(int argc, char** argv) {
 	cout << "Tree size: " << PRMgraph.size() << endl;
 
 	//***QUERY PHASE****//
+
+	Q start=PRMgraph.find(PRMgraph.begin()->second.getID())->second.getConfig();
+	Q goal=PRMgraph.find(PRMgraph.begin()->second.getID()+10)->second.getConfig();
+	vector<Q> solution = calculatePath(PRMgraph, start, goal, device);
+
+	/*cout << "The solution found is:" << endl;
+	for (auto i : solution){
+		cout << i.getID() << ", ";
+	}*/
+	cout << endl;
 
 	cout << " --- Program ended ---" << endl;
 	return 0;
