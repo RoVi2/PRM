@@ -36,6 +36,7 @@ private:
 	vector<int> _connections;
 	double _tempD;
 	double _score;
+	vector<Q> _solution;
 
 public:
 
@@ -62,6 +63,8 @@ public:
 	vector<int> getConnections() const {return(_connections);}
 	double getScore() const {return(_score);}
 	void setScore(double score) {_score=score;}
+	void addSolution(){_solution.push_back(_configuration);}
+	vector<Q> getSolution(){return _solution;}
 
 
 	double calculateMetrics(Q possibleNeighbour, Device::Ptr device) {
@@ -222,9 +225,10 @@ float calculateAStarScore(GraphNode & node, double currentPathScore, Q goalQ, De
 	//Stores the value in the node
 	node.setScore(g_x + h_x);
 	//Tadaaaaaa
-	cout << "Score for node " << node.getID() <<  " is: " << g_x + h_x << endl;
+	cout << "Score for node " << node.getID() <<  " is: " << g_x  << "+" << h_x << " = " << g_x+h_x << endl;
 	return g_x + h_x;
 }
+
 
 /**
  * Given a Graph calculates the shortest way from the Start node to the Goal node.
@@ -233,12 +237,11 @@ float calculateAStarScore(GraphNode & node, double currentPathScore, Q goalQ, De
  * @param goalNode The node you want to finish in
  * @return A vector with all the nodes followed
  */
-vector<GraphNode> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q goalQ, Device::Ptr device){
-	vector<GraphNode> solutionPath; //Here the solutions nodes will be stored
-
+vector<Q> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q goalQ, Device::Ptr device){
+	//The open and closed list
 	map<int, GraphNode> openList;
 	map<int, GraphNode> closedList;
-
+	//And the auxiliar node
 	GraphNode * currentNode;
 
 	//Lets find the ID of the start and goal states inside the graph
@@ -247,61 +250,61 @@ vector<GraphNode> calculatePath( map <int, GraphNode> & PRMgraph, Q startQ, Q go
 	cout << "The goal ID is: " << ID_goal << endl;
 
 	//Starts with the startNode
-	currentNode = &PRMgraph[ID_start];
-	openList[ID_start] = *currentNode;
+	openList[ID_start] = PRMgraph[ID_start];
+	currentNode = & openList[ID_start];
+	cout << "ID: " << openList[ID_start].getID() << " Connections: " << openList[ID_start].getConnections().size() << endl;
 	//And calculate its score
 	calculateAStarScore(*currentNode, 0, goalQ, device);
 
-	int limit=0;
+	//Reset the temporal variables, counter and limit
+	int counter = 0;
+	int limit = 10000;
 	int tempScore=99999;
 	int tempID=0;
 
 	//While nodes on the open list
-	while (!openList.empty() && limit<10){
-		tempScore = 999999;
+	while (!openList.empty() && counter<limit){
+		tempScore = 99999;
 		//Choose the node with the smallest score
 		cout << endl << "The openList size is: " << openList.size() << endl;
 		for (auto node : openList){
 			if (node.second.getScore()<=tempScore && node.second.getScore()>=0){
-				cout << "Score for node " << node.second.getID() << " is: " << node.second.getScore() << endl;
 				tempScore = node.second.getScore();
 				tempID = node.second.getID();
 			}
 		}
-		currentNode = &PRMgraph[tempID];
-		cout << "So now the current node ID is: " << currentNode->getID() << endl;
+		currentNode = &openList[tempID];
+		cout << "ID: " << currentNode->getID() << " Score: " << currentNode->getScore() << " Connections: " << currentNode->getConnections().size() << endl;
 		//Check if we are in the goal
-		if (currentNode->getID()==ID_goal) return solutionPath;
+		if (currentNode->getID()==ID_goal){
+			currentNode->addSolution();
+			return currentNode->getSolution();
+		}
 		//We add the current map to the closed list
 		closedList[currentNode->getID()] = *currentNode;
-		//And remove it from the openList
-		openList.erase(currentNode->getID());
-		cout << "The number of connection is:" << currentNode->getConnections().size() << endl;
 		//For all the connections, calculate the score of each one
 		for (auto nodeConnected : currentNode->getConnections()){
-			cout << "  with ID:" << PRMgraph[nodeConnected].getID() << endl;
+			openList[nodeConnected] = PRMgraph[nodeConnected];
+			openList[nodeConnected].addSolution()
+			cout << "  connected to:" << nodeConnected << endl;
 			//Check that it is not in the closed list
-			if (closedList.count(nodeConnected)==0 && PRMgraph[nodeConnected].getID()>0){
-				//Put it in the openList
-				//cout << "Connection ID: " << nodeConnected << endl;
-				openList[nodeConnected] = PRMgraph[nodeConnected];
+			if (closedList.count(nodeConnected)==0 && openList[nodeConnected].getID()>0){
 				//If so, calculate its score!
 				calculateAStarScore(openList.find(nodeConnected)->second, currentNode->getScore(), goalQ, device);
 			}
 		}
-
 		//Put it in the solution vector
-		solutionPath.push_back(*currentNode);
-
-		limit++;
+		currentNode->addSolution();
+		//And remove it from the openList
+		openList.erase(currentNode->getID());
+		//Updates the counter
+		counter++;
 	}
 
-	if (currentNode->getID()!=ID_goal){
-		solutionPath.empty();
-		cout << "Solution not found" << endl;
-	}
+	cout << "Solution not found" << endl;
 
-	return solutionPath;
+	vector<Q> imsorry;
+	return imsorry;
 }
 
 
@@ -329,11 +332,11 @@ int main(int argc, char** argv) {
 	Q goal(6, 0,0,0,0,0,7);
 
 	createFalseGraph(PRMgraph);
-	vector<GraphNode> solution = calculatePath(PRMgraph, start, goal, device);
+	vector<Q> solution = calculatePath(PRMgraph, start, goal, device);
 
 	cout << "The solution found is:" << endl;
 	for (auto i : solution){
-		cout << i.getID() << ", ";
+		cout << i << ", ";
 	}
 	cout << endl;
 
