@@ -26,8 +26,10 @@ using namespace rw::pathplanning;
 using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
-const double maxDist=50.0;
+const double maxDist=100.0;
+const double threshold=0.05;
 
+typedef std::pair< math::Q, math::Q> QBox; 
 
 class GraphNode {
 
@@ -109,7 +111,7 @@ class Metrics{
 	public:
 		bool operator()(GraphNode N1, GraphNode N2)
 		{
-		   if (N2.getTempD()<N1.getTempD()) return true;
+		   if (N2.getTempD()>N1.getTempD()) return true;
 		   return false;
 		}
 };
@@ -157,11 +159,10 @@ bool collisionChecking4(Q q1, Q q2, Device::Ptr device, const State &state, cons
 }
 
 
-Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDetector &detector){
+bool randomConfiguration(Device::Ptr device, const State &state, const CollisionDetector &detector, Q &Qrand){
 	State testState;
 	CollisionDetector::QueryResult data;
 	bool collision=true;
-	Q Qrand;
 
 	int a = 0;
 	while(collision){
@@ -172,11 +173,11 @@ Q randomConfiguration(Device::Ptr device, const State &state, const CollisionDet
 		if (a>10000) {
 				//Qrand.zero(6);
 				cout << "Fail to find a collision free configuration" << endl;	//*******What shall we do here??
-				break; 
+				return false; 
     	}
     	a++;
 	}
-	return Qrand;
+	return true;
 }
 
 Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const CollisionDetector &detector){
@@ -184,14 +185,15 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 	CollisionDetector::QueryResult data;
 	Q Qfin=nodeInit.getConfig();
 	bool collision;
+	QBox bounds=device->getBounds();
+	Q Qmin=bounds.first;
+	Q Qmax=bounds.second;
 
 	while(nodeInit.calculateMetrics(Qfin, testState, device)<maxDist){
 		Q Qdir=Math::ranDir(6,0.1);
 		collision=false;
-		while(!collision){
+		while(!collision && Qmin<(Qfin+Qdir) && (Qfin+Qdir)<Qmax){
 			Qfin+=Qdir;
-			cout << Qfin << endl;
-			sleep(1);
 			testState=state;
 			device->setQ(Qfin,testState);
 			collision=detector.inCollision(testState,&data);
@@ -200,6 +202,106 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 
 	return Qfin;
 }
+
+void addNodeToTree(Q configuration, Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID, 	priority_queue<GraphNode, vector<GraphNode>, Metrics> &candidateNeighbours)
+{
+	GraphNode newNode(configuration, ID);
+	cout<<"New configuration: "<<newNode.getConfig()<<" ID: "<<newNode.getID()<<endl;
+
+	int sizeNc=0;
+		//Go throught the graph looking for neighbours closer than maxDist and creates Nc
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
+		if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
+			candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
+			cout<<"-----Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
+		}
+	}
+
+	//Go through the set of neighbours
+	while(!candidateNeighbours.empty()){
+		//Check if there is a graph connection already ------> avoid cycles
+		if(checkConnections(newNode.getConnections(), candidateNeighbours.top().getConnections(), PRMgraph)){
+			//Check for collisions in the edges
+			if(!collisionChecking4(newNode.getConfig(), candidateNeighbours.top().getConfig(), device, state, detector)){
+				//Create the connection in the graph (update list of connections in both nodes)
+				newNode.newConnection(candidateNeighbours.top().getID());									//New connection in the new node
+				PRMgraph.find(candidateNeighbours.top().getID())->second.newConnection(newNode.getID());	//New connection in the node already in the graph
+				cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
+				sizeNc++;
+				//A maximum of 30 neighbours are connected and then the queue is empty
+				if(sizeNc>=30){
+					while(!candidateNeighbours.empty()){
+						candidateNeighbours.pop();
+					}
+				}
+				newNode.localPlanner(true);
+				PRMgraph.find(candidateNeighbours.top().getID())->second.localPlanner(true);
+
+			}
+			else{
+				cout<<"Collision detected in the edge"<<endl;
+				newNode.localPlanner(false);
+				PRMgraph.find(candidateNeighbours.top().getID())->second.localPlanner(false);
+			}
+		}	
+		else{
+			cout<<"Nodes already graph connected"<<endl;
+		}
+
+		candidateNeighbours.pop();		
+		}
+		
+	//Add new node to the PRM
+	PRMgraph[newNode.getID()]=newNode;
+	ID++;
+}
+
+void expandTree(Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID){
+	
+	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours2;
+	double total=0;
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
+	}
+
+	double max=0;
+	int max_index=0;
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		PRMgraph.find(it->second.getID())->second.setNFailureRatio(total);
+		if(PRMgraph.find(it->second.getID())->second.getNFailureRatio()>max){
+			max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
+			max_index=it->second.getID();
+		}
+		cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+	}
+
+	while(max>threshold){
+		Q r=randomBounce(PRMgraph.find(max_index)->second, device, state, detector);
+		addNodeToTree(r,device,state,detector,PRMgraph,ID, candidateNeighbours2);
+		cout << "New configuration Q: " << r << endl;
+
+		total=0;
+		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+			total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
+		}
+
+		max=0;
+		max_index=0;
+		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+			PRMgraph.find(it->second.getID())->second.setNFailureRatio(total);
+			if(PRMgraph.find(it->second.getID())->second.getNFailureRatio()>max){
+				max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
+				max_index=it->second.getID();
+			}
+			//cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+		}
+
+		cout << "Max failure: " << max << endl;
+	}
+}
+
+
 
 int main(int argc, char** argv) {
 
@@ -210,7 +312,7 @@ int main(int argc, char** argv) {
 	//Initializing workcell
 	Math::seed(time(NULL));
 	cout << " --- Program started --- " << endl << endl;
-	const string wcFile = "/home/ignaciotb/Documents/Semester1/Robotics1/Workcells/Kr16WorkCell/Scene.wc.xml";
+	const string wcFile = "/home/ignaciotb/Documents/Semester2/Robotics2/Lecture1/ProgrammingExercise/KukaKr16/Scene.wc.xml";
 	const string deviceName = "KukaKr16";
 	cout << "Trying to use workcell " << wcFile << " and device " << deviceName << endl;
 
@@ -229,9 +331,7 @@ int main(int argc, char** argv) {
 	map <int, GraphNode> PRMgraph;
 	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
 	int dale=0;
-	double maxDist=4.;
 	int ID=0; 
-	int sizeNc;
 	Q newQ;
 	
 	//Create Nc
@@ -242,54 +342,11 @@ int main(int argc, char** argv) {
 	//***LEARNING PHASE*****//
 
 	//1) CONSTRUCTION STEP
-	while(dale<20){	//Limited to the creation of 20 edges (for testing)
-
-		GraphNode newNode(randomConfiguration(device, state, detector), ID);
-		cout<<"New configuration: "<<newNode.getConfig()<<" ID: "<<newNode.getID()<<endl;
-
-		sizeNc=0;
-		//Go throught the graph looking for neighbours closer than maxDist and creates Nc
-		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
-			//If distance<=maxDist, we store the node in Nc (priority queue sorted by distance)
-			if(newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<=maxDist){
-				candidateNeighbours.push(PRMgraph.find(it->second.getID())->second);	
-				cout<<"-----Found neighbour: "<<it->second.getID()<<" Distance: "<<newNode.calculateMetrics(PRMgraph.find(it->second.getID())->second.getConfig(), state, device)<<endl;
-			}
-		}
-
-		//Go through the set of neighbours
-		while(!candidateNeighbours.empty()){
-			//Check if there is a graph connection already ------> avoid cycles
-			if(checkConnections(newNode.getConnections(), candidateNeighbours.top().getConnections(), PRMgraph)){
-				//Check for collisions in the edges
-				if(!collisionChecking4(newNode.getConfig(), candidateNeighbours.top().getConfig(), device, state, detector)){
-					//Create the connection in the graph (update list of connections in both nodes)
-					newNode.newConnection(candidateNeighbours.top().getID());									//New connection in the new node
-					PRMgraph.find(candidateNeighbours.top().getID())->second.newConnection(newNode.getID());	//New connection in the node already in the graph
-					dale++;
-					cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
-					sizeNc++;
-					//A maximum of 30 neighbours are connected and then the queue is empty
-					if(sizeNc>=30){
-						while(!candidateNeighbours.empty()){
-							candidateNeighbours.pop();
-						}
-					}
-				}
-				else{
-					cout<<"Collision detected in the edge"<<endl;
-				}
-			}	
-			else{
-				cout<<"Nodes already graph connected"<<endl;
-			}
-
-			candidateNeighbours.pop();		
-		}
-		
-		//Add new node to the PRM
-		PRMgraph[newNode.getID()]=newNode;
-		ID++;
+	while(dale<100){	//Limited to the creation of 20 edges (for testing)
+		Q Qrandom;
+		while(!randomConfiguration(device, state, detector, Qrandom)){}
+		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID, candidateNeighbours);
+		dale++;
 	}
 	//END OF CONSTRUCTION STEP
 	cout<<"Size of the PRM: "<<PRMgraph.size()<<endl;
@@ -304,7 +361,9 @@ int main(int argc, char** argv) {
 
 	//2) EXPANSION STEP
 
-	//*****************
+	expandTree(device, state, detector, PRMgraph, ID);	
+
+	cout << "Tree size: " << PRMgraph.size() << endl;
 
 	//***QUERY PHASE****//
 
