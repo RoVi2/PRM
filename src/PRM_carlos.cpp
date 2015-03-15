@@ -27,7 +27,9 @@ using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
 const double maxDist=1000.0;
+const double threshold=0.01;
 
+typedef std::pair< math::Q, math::Q> QBox; 
 
 class GraphNode {
 
@@ -183,14 +185,15 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 	CollisionDetector::QueryResult data;
 	Q Qfin=nodeInit.getConfig();
 	bool collision;
+	QBox bounds=device->getBounds();
+	Q Qmin=bounds.first;
+	Q Qmax=bounds.second;
 
 	while(nodeInit.calculateMetrics(Qfin, testState, device)<maxDist){
-		Q Qdir=Math::ranDir(6,0.1);
+		Q Qdir=Math::ranDir(6,0.5);
 		collision=false;
-		while(!collision){
+		while(!collision && Qmin<(Qfin+Qdir) && (Qfin+Qdir)<Qmax){
 			Qfin+=Qdir;
-			cout << Qfin << endl;
-			sleep(1);
 			testState=state;
 			device->setQ(Qfin,testState);
 			collision=detector.inCollision(testState,&data);
@@ -233,9 +236,14 @@ void addNodeToTree(Q configuration, Device::Ptr device, const State state, const
 						candidateNeighbours.pop();
 					}
 				}
+				newNode.localPlanner(true);
+				PRMgraph.find(candidateNeighbours.top().getID())->second.localPlanner(true);
+
 			}
 			else{
 				cout<<"Collision detected in the edge"<<endl;
+				newNode.localPlanner(false);
+				PRMgraph.find(candidateNeighbours.top().getID())->second.localPlanner(false);
 			}
 		}	
 		else{
@@ -290,7 +298,7 @@ int main(int argc, char** argv) {
 	//***LEARNING PHASE*****//
 
 	//1) CONSTRUCTION STEP
-	while(dale<3){	//Limited to the creation of 20 edges (for testing)
+	while(dale<10){	//Limited to the creation of 20 edges (for testing)
 		Q Qrandom;
 		while(!randomConfiguration(device, state, detector, Qrandom)){}
 		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID);
@@ -309,7 +317,44 @@ int main(int argc, char** argv) {
 
 	//2) EXPANSION STEP
 
-	//*****************
+	double total=0;
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
+	}
+
+	double max=0;
+	int max_index=0;
+	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		PRMgraph.find(it->second.getID())->second.setNFailureRatio(total);
+		if(PRMgraph.find(it->second.getID())->second.getNFailureRatio()>max){
+			max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
+			max_index=it->second.getID();
+		}
+		cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+	}
+
+	while(max>threshold){
+		Q r=randomBounce(PRMgraph.find(max_index)->second, device, state, detector);
+		cout << "New configuration Q: " << r << endl;
+
+		total=0;
+		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+			total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
+		}
+
+		cout << total << endl;
+
+		max=1;
+		max_index=0;
+		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+			PRMgraph.find(it->second.getID())->second.setNFailureRatio(total);
+			if(PRMgraph.find(it->second.getID())->second.getNFailureRatio()>max){
+				max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
+				max_index=it->second.getID();
+			}
+			cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+		}
+	}
 
 	//***QUERY PHASE****//
 
