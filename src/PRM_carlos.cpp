@@ -26,7 +26,7 @@ using namespace rw::pathplanning;
 using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
-const double maxDist=1000.0;
+const double maxDist=100.0;
 const double threshold=0.05;
 
 typedef std::pair< math::Q, math::Q> QBox; 
@@ -190,7 +190,7 @@ Q randomBounce(GraphNode nodeInit, Device::Ptr device, const State &state, const
 	Q Qmax=bounds.second;
 
 	while(nodeInit.calculateMetrics(Qfin, testState, device)<maxDist){
-		Q Qdir=Math::ranDir(6,0.5);
+		Q Qdir=Math::ranDir(6,0.1);
 		collision=false;
 		while(!collision && Qmin<(Qfin+Qdir) && (Qfin+Qdir)<Qmax){
 			Qfin+=Qdir;
@@ -258,65 +258,7 @@ void addNodeToTree(Q configuration, Device::Ptr device, const State state, const
 	ID++;
 }
 
-int main(int argc, char** argv) {
-
-	//Initial and goal configuration
-	Q q_init=Q(6, 0, -120, 110, 0, 100, 0);
-	Q q_goal=Q(6, -71, -96, 66, 26, 100, 0);
-
-	//Initializing workcell
-	Math::seed(time(NULL));
-	cout << " --- Program started --- " << endl << endl;
-	const string wcFile = "/home/moro/Apuntes/ROVI/Robotics/Workcell/KukaKr16/Scene.wc.xml";
-	const string deviceName = "KukaKr16";
-	cout << "Trying to use workcell " << wcFile << " and device " << deviceName << endl;
-
-	WorkCell::Ptr wc = WorkCellLoader::Factory::load(wcFile);
-	Device::Ptr device = wc->findDevice(deviceName);
-	if (device == NULL) {
-		cerr << "Device: " << deviceName << " not found!" << endl;
-		return 0;
-	}
-	const State state = wc->getDefaultState();
-
-	//Collision detector and strategy
-	CollisionDetector detector(wc, ProximityStrategyFactory::makeDefaultCollisionStrategy());
-
-	//Graph: created as a map container. The key is the node's ID
-	map <int, GraphNode> PRMgraph;
-	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
-	int dale=0;
-	int ID=0; 
-	int sizeNc;
-	Q newQ;
-	
-	//Create Nc
-	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours;
-
-	//***********************************PRM ALGORITHM******************************************
-
-	//***LEARNING PHASE*****//
-
-	//1) CONSTRUCTION STEP
-	while(dale<10){	//Limited to the creation of 20 edges (for testing)
-		Q Qrandom;
-		while(!randomConfiguration(device, state, detector, Qrandom)){}
-		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID);
-		dale++;
-	}
-	//END OF CONSTRUCTION STEP
-	cout<<"Size of the PRM: "<<PRMgraph.size()<<endl;
-
-	//Just for testing
-	/*for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
-		cout<<"Connections of node: "<<it->second.getID()<<", "<<endl;
-		for(int i=0; i<PRMgraph.find(it->second.getID())->second.getConnections().size(); i++){
-			cout<<PRMgraph.find(it->second.getID())->second.getConnections()[i]<<endl;
-		}
-	}*/
-
-	//2) EXPANSION STEP
-
+void expandTree(Device::Ptr device, const State state, const CollisionDetector &detector, map <int, GraphNode> &PRMgraph, int &ID){
 	double total=0;
 	for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 		total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
@@ -356,6 +298,69 @@ int main(int argc, char** argv) {
 
 		cout << "Max failure: " << max << endl;
 	}
+}
+
+int main(int argc, char** argv) {
+
+	//Initial and goal configuration
+	Q q_init=Q(6, 0, -120, 110, 0, 100, 0);
+	Q q_goal=Q(6, -71, -96, 66, 26, 100, 0);
+
+	//Initializing workcell
+	Math::seed(time(NULL));
+	cout << " --- Program started --- " << endl << endl;
+	const string wcFile = "/home/moro/Apuntes/ROVI/Robotics/Workcell/KukaKr16/Scene.wc.xml";
+	const string deviceName = "KukaKr16";
+	cout << "Trying to use workcell " << wcFile << " and device " << deviceName << endl;
+
+	WorkCell::Ptr wc = WorkCellLoader::Factory::load(wcFile);
+	Device::Ptr device = wc->findDevice(deviceName);
+	if (device == NULL) {
+		cerr << "Device: " << deviceName << " not found!" << endl;
+		return 0;
+	}
+	const State state = wc->getDefaultState();
+
+	//Collision detector and strategy
+	CollisionDetector detector(wc, ProximityStrategyFactory::makeDefaultCollisionStrategy());
+
+	//Graph: created as a map container. The key is the node's ID
+	map <int, GraphNode> PRMgraph;
+	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
+	int dale=0;
+	int ID=0; 
+	Q newQ;
+	
+	//Create Nc
+	priority_queue<GraphNode, vector<GraphNode>, Metrics> candidateNeighbours;
+
+	//***********************************PRM ALGORITHM******************************************
+
+	//***LEARNING PHASE*****//
+
+	//1) CONSTRUCTION STEP
+	while(dale<10){	//Limited to the creation of 20 edges (for testing)
+		Q Qrandom;
+		while(!randomConfiguration(device, state, detector, Qrandom)){}
+		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID);
+		dale++;
+	}
+	//END OF CONSTRUCTION STEP
+	cout<<"Size of the PRM: "<<PRMgraph.size()<<endl;
+
+	//Just for testing
+	/*for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
+		cout<<"Connections of node: "<<it->second.getID()<<", "<<endl;
+		for(int i=0; i<PRMgraph.find(it->second.getID())->second.getConnections().size(); i++){
+			cout<<PRMgraph.find(it->second.getID())->second.getConnections()[i]<<endl;
+		}
+	}*/
+
+	//2) EXPANSION STEP
+
+	expandTree(device, state, detector, PRMgraph, ID);	
+
+	cout << "Tree size: " << PRMgraph.size() << endl;
 
 	//***QUERY PHASE****//
 
