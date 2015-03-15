@@ -27,7 +27,7 @@ using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
 const double maxDist=1000.0;
-const double threshold=0.01;
+const double threshold=0.05;
 
 typedef std::pair< math::Q, math::Q> QBox; 
 
@@ -335,6 +335,7 @@ int main(int argc, char** argv) {
 
 	while(max>threshold){
 		Q r=randomBounce(PRMgraph.find(max_index)->second, device, state, detector);
+		addNodeToTree(r,device,state,detector,PRMgraph,ID);
 		cout << "New configuration Q: " << r << endl;
 
 		total=0;
@@ -342,9 +343,7 @@ int main(int argc, char** argv) {
 			total+=PRMgraph.find(it->second.getID())->second.getFailureRatio();
 		}
 
-		cout << total << endl;
-
-		max=1;
+		max=0;
 		max_index=0;
 		for(map<int,GraphNode>::iterator it = PRMgraph.begin(); it != PRMgraph.end(); ++it) {
 			PRMgraph.find(it->second.getID())->second.setNFailureRatio(total);
@@ -352,8 +351,10 @@ int main(int argc, char** argv) {
 				max=PRMgraph.find(it->second.getID())->second.getNFailureRatio();
 				max_index=it->second.getID();
 			}
-			cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
+			//cout << "Failure ratio of " << PRMgraph.find(it->second.getID())->second.getID() << " : " << PRMgraph.find(it->second.getID())->second.getNFailureRatio() << endl;
 		}
+
+		cout << "Max failure: " << max << endl;
 	}
 
 	//***QUERY PHASE****//
