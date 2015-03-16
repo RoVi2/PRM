@@ -26,7 +26,7 @@ using namespace rw::pathplanning;
 using namespace rw::trajectory;
 using namespace rwlibs::proximitystrategies;
 
-const double maxDist=20;
+const double maxDist=10;
 const double threshold=0.05;
 
 typedef std::pair< math::Q, math::Q> QBox;
@@ -242,7 +242,7 @@ public:
 					//Create the connection in the graph (update list of connections in both nodes)
 					newNode.newConnection(candidateNeighbours.top().getID());									//New connection in the new node
 					PRMgraph.find(candidateNeighbours.top().getID())->second.newConnection(newNode.getID());	//New connection in the node already in the graph
-					cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
+					//cout<<"Edge created between "<<newNode.getID()<<" and "<<candidateNeighbours.top().getID()<<endl;
 					edgeCounter++;
 					sizeNc++;
 					//edgesLimit++;
@@ -317,40 +317,6 @@ public:
 		}
 	}
 
-
-/**
- * Creates a false graph
- * @param graph
- */
-void createFalseGraph(map<int, GraphNode> & graph){
-	Q q1(6, 0,0,0,0,0,0);
-	Q q2(6, 0,0,0,0,0,1);
-	Q q3(6, 0,0,0,0,0,2);
-	Q q4(6, 0,0,0,0,0,3);
-	Q q5(6, 0,0,0,0,0,4);
-	Q q6(6, 0,0,0,0,0,5);
-	Q q7(6, 0,0,0,0,0,6);
-	Q q8(6, 0,0,0,0,0,7);
-
-	graph[0] = GraphNode(q1, 0);
-	graph[1] = GraphNode(q2, 1);
-	graph[2] = GraphNode(q3, 2);
-	graph[3] = GraphNode(q4, 3);
-	graph[4] = GraphNode(q5, 4);
-	graph[5] = GraphNode(q6, 5);
-	graph[6] = GraphNode(q7, 6);
-	graph[7] = GraphNode(q8, 7);
-
-	graph[0].newConnection(1);
-	graph[0].newConnection(2);
-	graph[2].newConnection(4);
-	graph[2].newConnection(3);
-	graph[4].newConnection(5);
-	graph[4].newConnection(6);
-	graph[5].newConnection(7);
-	graph[6].newConnection(7);
-	graph[7].newConnection(8);
-}
 
 /**
  * Given a Graph and the Q of one of its nodes, return the ID
@@ -544,6 +510,39 @@ vector<Q> calculatePathFromID( map <int, GraphNode> & PRMgraph, int ID_start, in
 	return imsorry;
 }
 
+void createFile(string robotName){
+	ofstream myFile;
+	myFile.open("simulation.lua");
+
+	myFile << "wc = rws.getRobWorkStudio():getWorkCell()" << endl;
+	myFile << "state = wc:getDefaultState()" << endl;
+	myFile << "device = wc:findDevice(\"" << robotName << "\")" << endl;
+	myFile << "function setQ(q)" << endl;
+	myFile << "qq = rw.Q(#q,q[1],q[2],q[3],q[4],q[5],q[6])" << endl;
+	myFile << "device:setQ(qq,state)" << endl;
+	myFile << "rws.getRobWorkStudio():setState(state)" << endl;
+	myFile << "rw.sleep(1)" << endl;
+	myFile << "end" << endl << endl;
+
+	myFile.close();
+}
+
+/*****************************************************************************************************************************/
+/******Function: addPosition												     */
+/******Inputs: next state vector of the robot									             */
+/******Outputs: input argument for the LUA function setQ								     */
+/******This function calls the setQ function in the LUA script to move the robot to its next configuration updating its state*/
+/*****************************************************************************************************************************/
+void addPosition(vector<Q> q){
+	ofstream myFile;
+	myFile.open("simulation.lua",ios::app);
+
+	for(size_t i=0; i<q.size(); i++){
+		myFile <<"setQ({"<<q[i][0]<<","<<q[i][1]<<","<<q[i][2]<<","<<q[i][3]<<","<<q[i][4]<<","<<q[i][5]<<"})"<<endl;
+	}
+	myFile.close();
+}
+
 
 int main(int argc, char** argv) {
 
@@ -568,7 +567,6 @@ int main(int argc, char** argv) {
 	//Graph: created as a map container. The key is the node's ID
 	map <int, GraphNode> PRMgraph;
 	PRMgraph.erase(PRMgraph.begin(), PRMgraph.end());
-	int dale=0;
 	int ID=0;
 
 	//Create Nc
@@ -580,15 +578,14 @@ int main(int argc, char** argv) {
 
 	//1) CONSTRUCTION STEP
 	int edgeCounter = 0;
-	int edgeLimit = 10;
+	int edgeLimit = 1000;
 	Timer edgeTimer;
 	edgeTimer.reset();
 	while(edgeCounter<edgeLimit){	//Limited to the creation of 20 edges (for testing)
 		Q Qrandom;
 		while(!randomConfiguration(device, state, detector, Qrandom)){}
 		addNodeToTree(Qrandom, device, state, detector, PRMgraph, ID, candidateNeighbours, edgeCounter);
-		cout << "Edge Number: " << edgeCounter << "Seconds: " << edgeTimer.getTimeMs() << endl;
-		edgeTimer.reset();
+		cout << "Edge Number: " << edgeCounter << endl;
 	}
 
 	//END OF CONSTRUCTION STEP
@@ -608,6 +605,8 @@ int main(int argc, char** argv) {
 
 	cout << "Tree size: " << PRMgraph.size() << endl;
 
+	edgeTimer.reset();
+	cout << "Total seconds: " << edgeTimer.getTimeSec() << endl;
 	//***QUERY PHASE****//
 
 	cout << endl << endl << "Searching for a path:" << endl;
@@ -646,6 +645,10 @@ int main(int argc, char** argv) {
 			for (auto i : solution){
 				cout << i << ", ";
 			}
+			createFile(deviceName);
+			addPosition(solution);
+			cout << "File created!" << endl;
+
 			cout << endl;
 		}
 
